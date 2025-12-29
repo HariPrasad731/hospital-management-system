@@ -5,15 +5,37 @@ import Input from "../components/common/Input";
 
 const STORAGE_KEY = "hms_patients";
 
+const MEDICAL_HISTORY = [
+  "Diabetes",
+  "Hypertension",
+  "Asthma",
+  "Heart Disease",
+  "Thyroid",
+];
+
+const emptyForm = {
+  firstName: "",
+  lastName: "",
+  gender: "",
+  phone: "",
+  dob: "",
+  maritalStatus: "",
+  street: "",
+  city: "",
+  state: "",
+  insurance: "",
+  medicalHistory: [],
+};
+
 export default function Patients() {
   const [patients, setPatients] = useState([]);
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
   const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
 
   const [searchParams] = useSearchParams();
-  const search = searchParams.get("search") || "";
+  const search = (searchParams.get("search") || "").toLowerCase();
 
   /* Load */
   useEffect(() => {
@@ -26,42 +48,79 @@ export default function Patients() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
   }, [patients]);
 
+  /* Search */
   const filteredPatients = patients.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
+    `${p.firstName} ${p.lastName} ${p.phone}`
+      .toLowerCase()
+      .includes(search)
   );
 
   const openAdd = () => {
     setEditingId(null);
-    setName("");
+    setForm(emptyForm);
     setError("");
     setOpen(true);
   };
 
   const openEdit = (patient) => {
     setEditingId(patient.id);
-    setName(patient.name);
+    setForm({
+      ...patient,
+      ...patient.address,
+    });
     setError("");
     setOpen(true);
   };
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+  };
+
+  const toggleHistory = (item) => {
+    setForm((prev) => ({
+      ...prev,
+      medicalHistory: prev.medicalHistory.includes(item)
+        ? prev.medicalHistory.filter((h) => h !== item)
+        : [...prev.medicalHistory, item],
+    }));
+  };
+
   const savePatient = () => {
-    if (!name.trim()) {
-      setError("Patient name is required");
+    if (!form.firstName || !form.phone) {
+      setError("First name and phone are required");
       return;
     }
+
+    const patientData = {
+      id: editingId || Date.now(),
+      firstName: form.firstName,
+      lastName: form.lastName,
+      gender: form.gender,
+      phone: form.phone,
+      dob: form.dob,
+      maritalStatus: form.maritalStatus,
+      insurance: form.insurance,
+      medicalHistory: form.medicalHistory,
+      address: {
+        street: form.street,
+        city: form.city,
+        state: form.state,
+      },
+    };
 
     if (editingId) {
       setPatients(
         patients.map((p) =>
-          p.id === editingId ? { ...p, name } : p
+          p.id === editingId ? patientData : p
         )
       );
     } else {
-      setPatients([...patients, { id: Date.now(), name }]);
+      setPatients([...patients, patientData]);
     }
 
     setOpen(false);
-    setName("");
+    setForm(emptyForm);
     setEditingId(null);
   };
 
@@ -71,10 +130,10 @@ export default function Patients() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <button
         onClick={openAdd}
-        className="mb-4 bg-emerald-600 text-white px-4 py-2 rounded"
+        className="bg-emerald-600 text-white px-4 py-2 rounded"
       >
         + Add Patient
       </button>
@@ -88,7 +147,14 @@ export default function Patients() {
               key={p.id}
               className="flex justify-between items-center p-4 border-b"
             >
-              <span>{p.name}</span>
+              <div>
+                <p className="font-medium">
+                  {p.firstName} {p.lastName}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {p.gender} • {p.phone}
+                </p>
+              </div>
 
               <div className="flex gap-4 text-sm">
                 <button
@@ -109,24 +175,152 @@ export default function Patients() {
         )}
       </div>
 
+      {/* Modal */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
         title={editingId ? "Edit Patient" : "Add Patient"}
       >
-        <Input
-          label="Patient Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="First Name"
+              name="firstName"
+              value={form.firstName}
+              onChange={handleChange}
+            />
+            <Input
+              label="Last Name"
+              name="lastName"
+              value={form.lastName}
+              onChange={handleChange}
+            />
+          </div>
 
-        <button
-          onClick={savePatient}
-          className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded"
-        >
-          {editingId ? "Update" : "Save"}
-        </button>
+          <Input
+            label="Phone"
+            name="phone"
+            value={form.phone}
+            onChange={handleChange}
+          />
+
+          <Input
+            type="date"
+            label="Date of Birth"
+            name="dob"
+            value={form.dob}
+            onChange={handleChange}
+          />
+
+          {/* Gender */}
+          <div>
+            <p className="text-sm font-medium">Gender</p>
+            <div className="flex gap-4">
+              {["Male", "Female"].map((g) => (
+                <label key={g} className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name="gender"
+                    value={g}
+                    checked={form.gender === g}
+                    onChange={handleChange}
+                  />
+                  {g}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Marital */}
+          <div>
+            <p className="text-sm font-medium">Marital Status</p>
+            <div className="flex gap-4 flex-wrap">
+              {["Single", "Married", "Divorced", "Widow"].map(
+                (m) => (
+                  <label
+                    key={m}
+                    className="flex items-center gap-1"
+                  >
+                    <input
+                      type="radio"
+                      name="maritalStatus"
+                      value={m}
+                      checked={form.maritalStatus === m}
+                      onChange={handleChange}
+                    />
+                    {m}
+                  </label>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Address */}
+          <Input
+            label="Street"
+            name="street"
+            value={form.street}
+            onChange={handleChange}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="City"
+              name="city"
+              value={form.city}
+              onChange={handleChange}
+            />
+            <Input
+              label="State"
+              name="state"
+              value={form.state}
+              onChange={handleChange}
+            />
+          </div>
+
+          <Input
+            label="Insurance Name"
+            name="insurance"
+            value={form.insurance}
+            onChange={handleChange}
+          />
+
+          {/* Medical History */}
+          <div>
+            <p className="text-sm font-medium">
+              Past Medical History
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {MEDICAL_HISTORY.map((h) => (
+                <label
+                  key={h}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.medicalHistory.includes(
+                      h
+                    )}
+                    onChange={() => toggleHistory(h)}
+                  />
+                  {h}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-red-500 text-sm">
+              {error}
+            </p>
+          )}
+
+          <button
+            onClick={savePatient}
+            className="w-full bg-emerald-600 text-white py-2 rounded"
+          >
+            {editingId ? "Update Patient" : "Save Patient"}
+          </button>
+        </div>
       </Modal>
     </div>
   );
